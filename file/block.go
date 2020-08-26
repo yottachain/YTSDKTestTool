@@ -3,7 +3,9 @@ package file
 import (
 	log "github.com/sirupsen/logrus"
 	hi "github.com/yottachain/YTHost/hostInterface"
+	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
+	st "github.com/yottachain/YTStTool/stat"
 	"sync"
 	"time"
 )
@@ -44,7 +46,7 @@ func (blk *block) IsUploaded() bool {
 }
 
 func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{},
-		blkSucShards int, fName string, wg *sync.WaitGroup) {
+	tkpool chan *tk.IdToToken, blkSucShards int, fName string, wg *sync.WaitGroup, cst *st.Ccstat) {
 	blk.SetUploading()
 	log.WithFields(log.Fields{
 		"fileName": fName,
@@ -54,7 +56,7 @@ func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{},
 	for _, v := range blk.shards {
 		if v.IsUnUpload() {
 			shdQ <- struct{}{}
-			go v.Upload(hst, ab, shdQ, fName, blk.bNum, wg)
+			go v.Upload(hst, ab, shdQ, tkpool, fName, blk.bNum, wg, cst)
 		}
 	}
 

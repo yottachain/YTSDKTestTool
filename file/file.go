@@ -5,7 +5,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	hi "github.com/yottachain/YTHost/hostInterface"
 	"github.com/yottachain/YTSDKTestTool/rand"
+	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
+	st "github.com/yottachain/YTStTool/stat"
 	"os"
 	"sync"
 	"time"
@@ -146,7 +148,8 @@ func (f *File) FilePrintInfo() {
 	}).Info("file base info")
 }
 
-func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{}, shardSucs int, wg *sync.WaitGroup) {
+func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{},
+			tkpool chan *tk.IdToToken, shardSucs int, wg *sync.WaitGroup, cst *st.Ccstat) {
 	f.SetUsed()
 	log.WithFields(log.Fields{
 		"filename": f.fileName,
@@ -156,7 +159,7 @@ func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, sh
 	for _, v := range f.blocks {
 		if v.IsUnupload() {
 			blkQ <- struct{}{}
-			go v.ShardUpload(hst, ab, blkQ, shdQ, shardSucs, f.fileName, wg)
+			go v.ShardUpload(hst, ab, blkQ, shdQ, tkpool, shardSucs, f.fileName, wg, cst)
 		}
 	}
 

@@ -7,7 +7,9 @@ import (
 	host "github.com/yottachain/YTHost"
 	"github.com/yottachain/YTHost/option"
 	f "github.com/yottachain/YTSDKTestTool/file"
+	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
+	st "github.com/yottachain/YTStTool/stat"
 	"os"
 	"sync"
 	"time"
@@ -18,6 +20,7 @@ func main()  {
 	var filecc	uint
 	var blockcc uint
 	var shardcc uint
+	var gtkcc   uint
 	var miners  uint
 	var files	uint
 	var filesize uint
@@ -29,9 +32,10 @@ func main()  {
 	flag.UintVar(&filecc, "fcc", 5, "上传文件的并发")
 	flag.UintVar(&blockcc, "bcc", 100, "上传块的并发")
 	flag.UintVar(&shardcc, "scc", 1000, "上传分片的并发")
+	flag.UintVar(&gtkcc, "gtcc", 2000, "获取token的并发")
 	flag.UintVar(&miners, "m", 2000, "选取的矿机数量")
 	flag.UintVar(&files, "fn", 10, "上传文件的数量")
-	flag.UintVar(&filesize, "fs", 100, "上传文件的大小")
+	flag.UintVar(&filesize, "fs", 100, "上传文件的大小(单位M)")
 	flag.UintVar(&shardeds, "ssn", 144, "上传多少个分片成功认为块上传成功")
 	flag.StringVar(&dataOringin, "d", "/dev/urandom", "数据源")
 	flag.StringVar(&codeType, "sn", "java", "sn类型，java版本还是go版本")
@@ -56,7 +60,7 @@ func main()  {
 	if err != nil {
 		log.Fatal(err)
 	}else {
-		ab.UpdateWeights(0)
+		ab.UpdateWeights(1)
 	}
 	go ab.Keep(60, codeType, int(miners), 0)
 
@@ -65,19 +69,32 @@ func main()  {
 		log.Fatal(err)
 	}
 
-	wg := sync.WaitGroup{}
+	cst := st.NewCcStat()
+	go cst.Print()
 
-	ups := NewUploads(fs, blockcc, shardcc, filesize, shardeds, dataOringin, files)
+	wg := sync.WaitGroup{}
+	wg1 := sync.WaitGroup{}
+
+	ups := NewUploads(fs, blockcc, shardcc, gtkcc, filesize, shardeds, dataOringin, files)
+	var IsStop = false
+	go tk.GetTkToPool(hst, ab, ups.gtkQueue, ups.tkPool, &IsStop, &wg1, cst)
 
 	upStartTime := time.Now()
-	ups.FileUpload(hst, ab, &wg)
+	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst)
 	wg.Wait()
-	totalTime := time.Now().Sub(upStartTime).Milliseconds()
+	IsStop = true
+	wg1.Wait()
+
+	totalTime := time.Now().Sub(upStartTime).Seconds()
+
+	<- time.After(5*time.Second)
+
 	log.WithFields(log.Fields{
-		"totalTime": totalTime,
-		"speed(M/s)":float32(files*filesize)/float32(totalTime),
+		"in database totalTime": inDatabaseTime.Seconds(),
+		"in database speed(M/s)":float32(files*filesize)/float32(inDatabaseTime.Seconds()),
+		"real totalTime": totalTime,
+		"real speed(M/s)":float32(files*filesize)/float32(totalTime),
 	}).Info("all files upload success")
 
 	ab.PrintWeight()
-
 }

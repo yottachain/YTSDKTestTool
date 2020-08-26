@@ -4,7 +4,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	hi "github.com/yottachain/YTHost/hostInterface"
 	f "github.com/yottachain/YTSDKTestTool/file"
+	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
+	st "github.com/yottachain/YTStTool/stat"
 	"sync"
 	"time"
 )
@@ -12,6 +14,8 @@ import (
 type uploads struct {
 	blkQueue	chan struct{}
 	shardQueue	chan struct{}
+	gtkQueue 	chan struct{}
+	tkPool		chan *tk.IdToToken
 	files 		[] *f.File
 	upSucfiles	int
 	shardSucs   uint
@@ -20,10 +24,12 @@ type uploads struct {
 	totalfs		uint
 }
 
-func NewUploads(files [] *f.File, bcc uint, scc uint, fsize uint, shardSucs uint, dataSrcName string, totalfs uint) *uploads {
+func NewUploads(files [] *f.File, bcc uint, scc uint, gtcc uint, fsize uint, shardSucs uint, dataSrcName string, totalfs uint) *uploads {
 	return &uploads{
 		make(chan struct{}, bcc),
 		make(chan struct{}, scc),
+		make(chan struct{}, gtcc),
+		make(chan *tk.IdToToken, gtcc),
 		files,
 		0,
 		shardSucs,
@@ -33,12 +39,12 @@ func NewUploads(files [] *f.File, bcc uint, scc uint, fsize uint, shardSucs uint
 	}
 }
 
-func (ups *uploads) FileUpload(hst hi.Host, ab *cm.AddrsBook, wg *sync.WaitGroup) {
+func (ups *uploads) FileUpload(hst hi.Host, ab *cm.AddrsBook, wg *sync.WaitGroup, cst *st.Ccstat) time.Duration {
+	startTime := time.Now()
 	for {
 		for _, v := range ups.files {
-			//v.FilePrintInfo()
 			if v.IsUnuse() {
-				go v.BlockUpload(hst, ab, ups.blkQueue, ups.shardQueue, int(ups.shardSucs), wg)
+				go v.BlockUpload(hst, ab, ups.blkQueue, ups.shardQueue, ups.tkPool, int(ups.shardSucs), wg, cst)
 			}
 		}
 
@@ -48,11 +54,15 @@ func (ups *uploads) FileUpload(hst hi.Host, ab *cm.AddrsBook, wg *sync.WaitGroup
 			if v.IsUpFinish() {
 				v.FilePrintInfo()
 				ups.FileAddSuc(1)
-				v.SetUnuse()
 				if ups.upSucfiles >= int(ups.totalfs) {
 					break
 				}
-				v.AppendFiles(int(ups.fsize), ups.dataSrcName)
+				//v.SetUnuse()
+				//v.AppendFiles(int(ups.fsize), ups.dataSrcName)
+				err := ups.AppendFile(int(ups.fsize), ups.dataSrcName)
+				if err != nil {
+					log.Fatalf("ups append file fail, error=%s", err.Error())
+				}
 			}
 		}
 
@@ -64,8 +74,21 @@ func (ups *uploads) FileUpload(hst hi.Host, ab *cm.AddrsBook, wg *sync.WaitGroup
 			break
 		}
 	}
+	return time.Now().Sub(startTime)
 }
 
 func (ups *uploads) FileAddSuc(n int) {
 	ups.upSucfiles = ups.upSucfiles + n
+}
+
+func (ups *uploads) AppendFile(fs int, datasrcName string) error {
+	file := &f.File{}
+	err := file.FileInit(fs, datasrcName)
+	if err != nil {
+		return err
+	}
+
+	ups.files = append(ups.files, file)
+
+	return nil
 }

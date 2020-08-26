@@ -9,7 +9,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/yottachain/YTDataNode/message"
 	hi "github.com/yottachain/YTHost/hostInterface"
+	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
+	st "github.com/yottachain/YTStTool/stat"
 	"math/rand"
 	"sync"
 	"time"
@@ -30,14 +32,134 @@ const (
 	SUPLOADED
 )
 
-func (sh *shard) Upload(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{}, fName string, blkNum int, wg *sync.WaitGroup) {
+func (sh *shard) Upload(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
+	tkpool chan *tk.IdToToken, fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat) {
 	sh.SetUploading()
 	wg.Add(1)
 	defer func() {
 		wg.Done()
 	}()
 
-	startup:
+startup:
+	token := <- tkpool
+	cst.ConsumeTkAdd()
+	nId := token.GetPid()
+
+	addrs, ok := ab.Get(nId)
+	if !ok {
+		log.WithFields(log.Fields{
+			"peer id": nId,
+		}).Error("get addr error")
+		//cst.ConsumeTkSub()
+		goto startup
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
+	defer cancel()
+
+	clt, err := hst.ClientStore().Get(ctx, nId, addrs)
+	if err != nil {
+		ADDRs := make([]string, len(addrs))
+		for k, m := range addrs {
+			ADDRs[k] = m.String()
+		}
+		var sAddrs string
+		for _, v := range ADDRs {
+			sAddrs = sAddrs + v + " "
+		}
+		log.WithFields(log.Fields{
+			"nodeid": peer.Encode(nId),
+			"addrs": sAddrs,
+		}).Error("upload shard connect error", err)
+
+		//cst.ConsumeTkSub()
+		goto startup
+	}
+
+	m5 := md5.New()
+	m5.Reset()
+	m5.Write(sh.sh)
+	var vhf = m5.Sum(nil)
+	var b58vhf = base58.Encode(vhf)
+	var uploadReqMsg message.UploadShardRequestTest
+
+	uploadReqMsg.AllocId = token.GetToken().AllocId
+	uploadReqMsg.VHF = vhf
+	uploadReqMsg.DAT = sh.sh
+	uploadReqMsg.Sleep = 100
+
+	uploadReqData, err := proto.Marshal(&uploadReqMsg)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+			"miner": peer.Encode(nId),
+		}).Error("upload request proto marshal error")
+		goto startup
+	}
+
+	log.WithFields(log.Fields{
+		"filename": fName,
+		"block": blkNum,
+		"shard": sh.sNum,
+		"VHF": b58vhf,
+		"miner": peer.Encode(nId),
+	}).Info("shard uploading")
+
+	//cst.ConsumeTkSub()
+	cst.SendccAdd()
+	cst.IdccAdd(nId)
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
+	defer cancel2()
+	res, err := clt.SendMsg(ctx2, message.MsgIDSleepReturn.Value(), uploadReqData)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"nodeid": peer.Encode(nId),
+			"err":    err,
+		}).Error("message send error")
+
+		cst.SendccSub()
+		//cst.ConsumeTkSub()
+		cst.IdccSub(nId)
+		goto startup
+	}
+
+	cst.SendccSub()
+	//cst.ConsumeTkSub()
+	cst.IdccSub(nId)
+
+	var resmsg message.UploadShardResponse
+	err = proto.Unmarshal(res[2:], &resmsg)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"nodeid": peer.Encode(nId),
+			"err": err,
+		}).Error("msg response proto Unmarshal error")
+
+		goto startup
+	}
+
+	log.WithFields(log.Fields{
+		"filename": fName,
+		"block": blkNum,
+		"shard": sh.sNum,
+		"VHF": b58vhf,
+		"miner": peer.Encode(nId),
+	}).Info("shard uploaded")
+
+	sh.SetUploaded()
+	<-shdQ
+}
+
+func (sh *shard) UploadBK(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
+	tkpool chan *tk.IdToToken, fName string, blkNum int, wg *sync.WaitGroup) {
+	sh.SetUploading()
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+startup:
 	abLen := ab.GetWeightsLen()
 	if abLen == 0 {
 		log.WithFields(log.Fields{
@@ -99,8 +221,8 @@ func (sh *shard) Upload(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{}, fName
 	err = proto.Unmarshal(res[2:], &resGetToken)
 	if err != nil {
 		log.WithFields(log.Fields{
-		"nodeid": peer.Encode(nId),
-		"err": err,
+			"nodeid": peer.Encode(nId),
+			"err": err,
 		}).Error("get token response proto Unmarshal error")
 		goto startup
 	}
