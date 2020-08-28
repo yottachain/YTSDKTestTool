@@ -1,7 +1,9 @@
 package file
 
 import (
+	"crypto/md5"
 	"fmt"
+	"github.com/mr-tron/base58"
 	log "github.com/sirupsen/logrus"
 	hi "github.com/yottachain/YTHost/hostInterface"
 	"github.com/yottachain/YTSDKTestTool/rand"
@@ -33,6 +35,7 @@ const (
 
 
 var remainfs uint32 = 0
+var m5 = md5.New()
 
 func NewFileMage(fcc uint, fn uint, fs int, datasrcName string) ([] *File, error) {
 	files := make([] *File, fcc)
@@ -102,7 +105,11 @@ func (f *File) FileInit(fs int, datasrcName string) error {
 		for k := 0; k < 160; k++ {
 			var data = make([]byte, 16*1024)
 			f.fd.Read(data)
-			f.blocks[j].shards[k] = &shard{k, data, SUNUPLOAD}
+			m5.Reset()
+			m5.Write(data)
+			var vhf = m5.Sum(nil)
+			var b58vhf = base58.Encode(vhf)
+			f.blocks[j].shards[k] = &shard{k, data, vhf, b58vhf, SUNUPLOAD}
 		}
 	}
 	f.upStatus = UPUNUSE
@@ -149,7 +156,7 @@ func (f *File) FilePrintInfo() {
 }
 
 func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{},
-			tkpool chan *tk.IdToToken, shardSucs int, wg *sync.WaitGroup, cst *st.Ccstat) {
+			tkpool chan *tk.IdToToken, shardSucs int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat) {
 	f.SetUsed()
 	log.WithFields(log.Fields{
 		"filename": f.fileName,
@@ -159,7 +166,7 @@ func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, sh
 	for _, v := range f.blocks {
 		if v.IsUnupload() {
 			blkQ <- struct{}{}
-			go v.ShardUpload(hst, ab, blkQ, shdQ, tkpool, shardSucs, f.fileName, wg, cst)
+			go v.ShardUpload(hst, ab, blkQ, shdQ, tkpool, shardSucs, f.fileName, wg, cst, nst)
 		}
 	}
 

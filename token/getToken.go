@@ -27,16 +27,16 @@ func (idt *IdToToken) GetToken () *message.NodeCapacityResponse{
 	return idt.tk
 }
 
-var r = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *IdToToken,
-			wg *sync.WaitGroup, cst *st.Ccstat) {
+			wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, tpl *sync.Mutex) {
 	defer func() {
 		<- gtkQ
 		wg.Done()
 	}()
 	wg.Add(1)
 
+
+	var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	abLen := ab.GetWeightsLen()
 	if abLen == 0 {
@@ -46,7 +46,13 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 		return
 	}
 	idx := r.Intn(abLen)
+	//log.WithFields(log.Fields{
+	//	"index": idx,
+	//}).Error("get addr index")
+
 	nId := ab.GetWeightId(idx)
+	nst.SetWeight(nId, ab.GetIdWeight(nId))
+
 	addrs, ok := ab.Get(nId)
 	if !ok {
 		log.WithFields(log.Fields{
@@ -71,9 +77,11 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 			"addrs": sAddrs,
 		}).Error("connect fail error=", err)
 
-		//cst.GtccSub()
+		nst.ConnErrAdd(nId)
 		return
 	}
+
+	nst.ConnSuccAdd(nId)
 
 	var getToken message.NodeCapacityRequest
 	getTokenData, err := proto.Marshal(&getToken)
@@ -82,7 +90,6 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 			"err": err,
 		}).Error("request proto marshal error")
 
-		//cst.GtccSub()
 		return
 	}
 
@@ -90,15 +97,20 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 
 	ctx1, cal := context.WithTimeout(context.Background(), time.Second*1)
 	defer cal()
+	ssTime := time.Now()
 	res, err := clt.SendMsg(ctx1, message.MsgIDNodeCapacityRequest.Value(), getTokenData)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"nodeid": peer.Encode(nId),
 		}).Error("get token fail")
 
+		nst.GtDelay(nId, time.Now().Sub(ssTime))
+		nst.GtErrAdd(nId)
 		cst.GtccSub()
 		return
 	}
+
+	nst.GtDelay(nId, time.Now().Sub(ssTime))
 
 	var resGetToken message.NodeCapacityResponse
 	err = proto.Unmarshal(res[2:], &resGetToken)
@@ -113,6 +125,7 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 	}
 
 	if !resGetToken.Writable  {
+		nst.GtErrAdd(nId)
 		cst.GtccSub()
 		return
 	}else {
@@ -121,21 +134,34 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 		}).Info("获取token成功")
 	}
 
+	nst.GtSuccAdd(nId)
 	cst.GtccSub()
-	tkpool <- &IdToToken{nId, &resGetToken}
-	cst.SetTkPoolLen(len(tkpool))
+
+	tpl.Lock()
+	tkpoolLen := len(tkpool)
+	//log.WithFields(log.Fields{
+	//	"cap": cap(tkpool),
+	//	"len": tkpoolLen,
+	//}).Info("token pool cap and len")
+
+	if tkpoolLen < cap(tkpool) {
+		cst.SetTkPoolLen(tkpoolLen)
+		tkpool <- &IdToToken{nId, &resGetToken}
+	}
+	tpl.Unlock()
 
 	return
 }
 
 
 func GetTkToPool(hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{},
-				tkPool chan *IdToToken, isStop *bool, wg *sync.WaitGroup, cst *st.Ccstat) {
+				tkPool chan *IdToToken, isStop *bool, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat) {
+	tKPoollck := &sync.Mutex{}
 	for {
-		gtkQ <- struct{}{}
 		if *isStop {
 			break
 		}
-		go gettoken(hst, ab, gtkQ, tkPool, wg, cst)
+		gtkQ <- struct{}{}
+		go gettoken(hst, ab, gtkQ, tkPool, wg, cst, nst, tKPoollck)
 	}
 }

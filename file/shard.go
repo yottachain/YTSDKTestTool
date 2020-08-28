@@ -2,10 +2,8 @@ package file
 
 import (
 	"context"
-	"crypto/md5"
 	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/mr-tron/base58"
 	log "github.com/sirupsen/logrus"
 	"github.com/yottachain/YTDataNode/message"
 	hi "github.com/yottachain/YTHost/hostInterface"
@@ -20,6 +18,8 @@ import (
 type shard struct {
 	sNum  	int
 	sh		[] byte
+	vhf 	[] byte
+	bs58Vhf string
 	upstatus shardUpstatus
 }
 
@@ -33,7 +33,7 @@ const (
 )
 
 func (sh *shard) Upload(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
-	tkpool chan *tk.IdToToken, fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat) {
+	tkpool chan *tk.IdToToken, fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat) {
 	sh.SetUploading()
 	wg.Add(1)
 	defer func() {
@@ -49,13 +49,13 @@ startup:
 	if !ok {
 		log.WithFields(log.Fields{
 			"peer id": nId,
-		}).Error("get addr error")
-		//cst.ConsumeTkSub()
+		}).Error("upload shard get addr error")
+		cst.ConsumeTkSub()
 		goto startup
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
-	defer cancel()
+	//defer cancel()
 
 	clt, err := hst.ClientStore().Get(ctx, nId, addrs)
 	if err != nil {
@@ -70,21 +70,25 @@ startup:
 		log.WithFields(log.Fields{
 			"nodeid": peer.Encode(nId),
 			"addrs": sAddrs,
-		}).Error("upload shard connect error", err)
+		}).Error("upload shard connect error=", err)
 
-		//cst.ConsumeTkSub()
+		nst.ConnErrAdd(nId)
+		cst.ConsumeTkSub()
+		cancel()
 		goto startup
 	}
 
-	m5 := md5.New()
-	m5.Reset()
-	m5.Write(sh.sh)
-	var vhf = m5.Sum(nil)
-	var b58vhf = base58.Encode(vhf)
+	nst.ConnSuccAdd(nId)
+
+	//m5 := md5.New()
+	//m5.Reset()
+	//m5.Write(sh.sh)
+	//var vhf = m5.Sum(nil)
+	//var b58vhf = base58.Encode(vhf)
 	var uploadReqMsg message.UploadShardRequestTest
 
 	uploadReqMsg.AllocId = token.GetToken().AllocId
-	uploadReqMsg.VHF = vhf
+	uploadReqMsg.VHF = sh.vhf
 	uploadReqMsg.DAT = sh.sh
 	uploadReqMsg.Sleep = 100
 
@@ -93,24 +97,25 @@ startup:
 		log.WithFields(log.Fields{
 			"err": err,
 			"miner": peer.Encode(nId),
-		}).Error("upload request proto marshal error")
+		}).Error("upload shard request proto marshal error")
+		cst.ConsumeTkSub()
 		goto startup
 	}
 
-	log.WithFields(log.Fields{
-		"filename": fName,
-		"block": blkNum,
-		"shard": sh.sNum,
-		"VHF": b58vhf,
-		"miner": peer.Encode(nId),
-	}).Info("shard uploading")
+	//log.WithFields(log.Fields{
+	//	"filename": fName,
+	//	"block": blkNum,
+	//	"shard": sh.sNum,
+	//	"VHF": sh.bs58Vhf,
+	//	"miner": peer.Encode(nId),
+	//}).Info("shard uploading")
 
-	//cst.ConsumeTkSub()
 	cst.SendccAdd()
 	cst.IdccAdd(nId)
 
+	ssTime := time.Now()
 	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
-	defer cancel2()
+	//defer cancel2()
 	res, err := clt.SendMsg(ctx2, message.MsgIDSleepReturn.Value(), uploadReqData)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -118,14 +123,19 @@ startup:
 			"err":    err,
 		}).Error("message send error")
 
+		nst.SendDelay(nId, time.Now().Sub(ssTime))
+		nst.SendErrAdd(nId)
 		cst.SendccSub()
-		//cst.ConsumeTkSub()
+		cst.ConsumeTkSub()
 		cst.IdccSub(nId)
+		cancel2()
 		goto startup
 	}
 
+	nst.SendSuccAdd(nId)
+	nst.SendDelay(nId, time.Now().Sub(ssTime))
 	cst.SendccSub()
-	//cst.ConsumeTkSub()
+	cst.ConsumeTkSub()
 	cst.IdccSub(nId)
 
 	var resmsg message.UploadShardResponse
@@ -143,7 +153,7 @@ startup:
 		"filename": fName,
 		"block": blkNum,
 		"shard": sh.sNum,
-		"VHF": b58vhf,
+		"VHF": sh.bs58Vhf,
 		"miner": peer.Encode(nId),
 	}).Info("shard uploaded")
 
@@ -235,15 +245,15 @@ startup:
 		}).Info("获取token成功")
 	}
 
-	m5 := md5.New()
-	m5.Reset()
-	m5.Write(sh.sh)
-	var vhf = m5.Sum(nil)
-	var b58vhf = base58.Encode(vhf)
+	//m5 := md5.New()
+	//m5.Reset()
+	//m5.Write(sh.sh)
+	//var vhf = m5.Sum(nil)
+	//var b58vhf = base58.Encode(vhf)
 	var uploadReqMsg message.UploadShardRequestTest
 
 	uploadReqMsg.AllocId = resGetToken.AllocId
-	uploadReqMsg.VHF = vhf
+	uploadReqMsg.VHF = sh.vhf
 	uploadReqMsg.DAT = sh.sh
 	uploadReqMsg.Sleep = 100
 
@@ -260,7 +270,7 @@ startup:
 		"filename": fName,
 		"block": blkNum,
 		"shard": sh.sNum,
-		"VHF": b58vhf,
+		"VHF": sh.bs58Vhf,
 		"miner": peer.Encode(nId),
 	}).Info("shard uploading")
 
@@ -291,7 +301,7 @@ startup:
 		"filename": fName,
 		"block": blkNum,
 		"shard": sh.sNum,
-		"VHF": b58vhf,
+		"VHF": sh.bs58Vhf,
 		"miner": peer.Encode(nId),
 	}).Info("shard uploaded")
 

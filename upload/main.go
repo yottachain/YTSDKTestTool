@@ -27,6 +27,7 @@ func main()  {
 	var dataOringin string
 	var shardeds uint
 	var codeType string
+	var divisor uint
 
 	flag.StringVar(&listenaddr, "l", "/ip4/0.0.0.0/tcp/9003", "监听地址")
 	flag.UintVar(&filecc, "fcc", 5, "上传文件的并发")
@@ -39,6 +40,7 @@ func main()  {
 	flag.UintVar(&shardeds, "ssn", 144, "上传多少个分片成功认为块上传成功")
 	flag.StringVar(&dataOringin, "d", "/dev/urandom", "数据源")
 	flag.StringVar(&codeType, "sn", "java", "sn类型，java版本还是go版本")
+	flag.UintVar(&divisor, "div", 2, "选择所有节点的1/div的数量作为发送节点, 默认是2也就是选取一半的节点")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -56,13 +58,13 @@ func main()  {
 		log.Fatal(err)
 	}
 
-	ab, err := cm.NewAddBookFromServer(codeType, 1, int(miners))
+	ab, err := cm.NewAddBookFromServer(codeType, divisor, int(miners))
 	if err != nil {
 		log.Fatal(err)
 	}else {
 		ab.UpdateWeights(1)
 	}
-	go ab.Keep(60, codeType, int(miners), 0)
+	go ab.Keep(60, codeType, int(miners), 1)
 
 	fs, err := f.NewFileMage(filecc, files, int(filesize), dataOringin)
 	if err != nil {
@@ -70,6 +72,9 @@ func main()  {
 	}
 
 	cst := st.NewCcStat()
+	nst := &st.NodeStat{}
+	nst.Init()
+
 	go cst.Print()
 
 	wg := sync.WaitGroup{}
@@ -77,14 +82,24 @@ func main()  {
 
 	ups := NewUploads(fs, blockcc, shardcc, gtkcc, filesize, shardeds, dataOringin, files)
 	var IsStop = false
-	go tk.GetTkToPool(hst, ab, ups.gtkQueue, ups.tkPool, &IsStop, &wg1, cst)
+	go tk.GetTkToPool(hst, ab, ups.gtkQueue, ups.tkPool, &IsStop, &wg1, cst, nst)
 
 	upStartTime := time.Now()
-	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst)
+	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst)
+	//log.WithFields(log.Fields{
+	//}).Info("indatabase upload success")
+
 	wg.Wait()
+	//log.WithFields(log.Fields{
+	//}).Info("upload success--------------------------")
+
 	IsStop = true
 	wg1.Wait()
+	log.WithFields(log.Fields{
+	}).Info("get token end---------------")
 
+	go cst.Print()
+	nst.Print()
 	totalTime := time.Now().Sub(upStartTime).Seconds()
 
 	<- time.After(5*time.Second)
