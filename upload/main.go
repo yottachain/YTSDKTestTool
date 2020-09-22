@@ -11,6 +11,7 @@ import (
 	cm "github.com/yottachain/YTStTool/ClientManage"
 	st "github.com/yottachain/YTStTool/stat"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -28,6 +29,8 @@ func main()  {
 	var shardeds uint
 	var codeType string
 	var divisor uint
+	var openstat *bool
+	var wgdivisor int
 
 	flag.StringVar(&listenaddr, "l", "/ip4/0.0.0.0/tcp/9003", "监听地址")
 	flag.UintVar(&filecc, "fcc", 5, "上传文件的并发")
@@ -41,9 +44,32 @@ func main()  {
 	flag.StringVar(&dataOringin, "d", "/dev/urandom", "数据源")
 	flag.StringVar(&codeType, "sn", "java", "sn类型，java版本还是go版本")
 	flag.UintVar(&divisor, "div", 2, "选择所有节点的1/div的数量作为发送节点, 默认是2也就是选取一半的节点")
+	flag.IntVar(&wgdivisor, "wgdiv", 10, "矿机权重命中概率因子")
+	openstat = flag.Bool("os", false, "是否开启成功率等相关统计")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
+
+	log.WithFields(log.Fields{
+		"divisor": divisor,
+		"wgdivisor": wgdivisor,
+		"openstat": *openstat,
+		"files": files,
+		"filesize": filesize,
+		"shardeds": shardeds,
+		"gtkcc": gtkcc,
+		"filecc": filecc,
+		"blockcc": blockcc,
+		"shardcc": shardcc,
+		"miners": miners,
+		"sn": codeType,
+	}).Info("args info")
+
+	runtime.GOMAXPROCS(16)
+
+	log.WithFields(log.Fields{
+		"rt_cpus":runtime.NumCPU(),
+	}).Info("go runtime os info")
 
 	if files < filecc {
 		filecc = files
@@ -62,25 +88,25 @@ func main()  {
 	if err != nil {
 		log.Fatal(err)
 	}else {
-		ab.UpdateWeights(1)
+		ab.UpdateWeights(1, wgdivisor)
 	}
-	go ab.Keep(60, codeType, int(miners), 1)
+	go ab.Keep(60, codeType, int(miners), 1, wgdivisor)
 
-	fs, err := f.NewFileMage(filecc, files, int(filesize), dataOringin)
+	fs, err := f.NewFileMage(files, int(filesize), dataOringin)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	cst := st.NewCcStat()
 	nst := &st.NodeStat{}
-	nst.Init()
+	nst.Init(*openstat)
 
 	go cst.Print()
 
 	wg := sync.WaitGroup{}
 	wg1 := sync.WaitGroup{}
 
-	ups := NewUploads(fs, blockcc, shardcc, gtkcc, filesize, shardeds, dataOringin, files)
+	ups := NewUploads(fs, filecc, blockcc, shardcc, gtkcc, filesize, shardeds, dataOringin, files)
 	var IsStop = false
 	go tk.GetTkToPool(hst, ab, ups.gtkQueue, ups.tkPool, &IsStop, &wg1, cst, nst)
 
@@ -91,18 +117,33 @@ func main()  {
 
 	wg.Wait()
 	//log.WithFields(log.Fields{
-	//}).Info("upload success--------------------------")
+	//}).Info("all upload success")
+	totalTime := time.Now().Sub(upStartTime).Seconds()
 
 	IsStop = true
 	wg1.Wait()
-	log.WithFields(log.Fields{
-	}).Info("get token end---------------")
 
 	go cst.Print()
 	nst.Print()
-	totalTime := time.Now().Sub(upStartTime).Seconds()
+
+
+	connRate, gtRate, sendRate, gtAvg, sendAvg, gtTotalSuc, sendTotalSuc := nst.GetTotalStat()
 
 	<- time.After(5*time.Second)
+	log.WithFields(log.Fields{
+		"lenght": len(ups.files),
+	}).Info("real files")
+
+	log.WithFields(log.Fields{
+		"connrate":connRate,
+		"gtrate":gtRate,
+		"sendrate":sendRate,
+		"gtavg":gtAvg,
+		"sendavg":sendAvg,
+		"gtTotalSuc":gtTotalSuc,
+		"sendTotalSuc":sendTotalSuc,
+
+	}).Info("success rate stat")
 
 	log.WithFields(log.Fields{
 		"in database totalTime": inDatabaseTime.Seconds(),

@@ -62,7 +62,7 @@ func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{},
 
 	for {
 		<- time.After(100*time.Millisecond)
-		blk.CheckUploaded(blkSucShards)
+		blk.CheckUploaded(blkSucShards, fName)
 		if blk.IsUploaded() {
 			<- blkQ
 			break
@@ -70,7 +70,7 @@ func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{},
 	}
 }
 
-func (blk *block) CheckUploaded(blkSucShards int) {
+func (blk *block) CheckUploaded(blkSucShards int, fn string) {
 	blk.shardSucs = 0
 	for _, v := range blk.shards {
 		if v.IsUploaded() {
@@ -80,5 +80,10 @@ func (blk *block) CheckUploaded(blkSucShards int) {
 
 	if blk.shardSucs >= blkSucShards {
 		blk.SetUploaded()
+		log.WithFields(log.Fields{
+			"fileName": fn,
+			"blks": blk.bNum,
+			"shards":blk.shardSucs,
+		}).Info("file block upload success")
 	}
 }

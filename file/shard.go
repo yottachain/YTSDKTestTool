@@ -44,15 +44,16 @@ startup:
 	token := <- tkpool
 	cst.ConsumeTkAdd()
 	nId := token.GetPid()
+	addrs := token.GetAddrs()
 
-	addrs, ok := ab.Get(nId)
-	if !ok {
-		log.WithFields(log.Fields{
-			"peer id": nId,
-		}).Error("upload shard get addr error")
-		cst.ConsumeTkSub()
-		goto startup
-	}
+	//addrs, ok := ab.Get(nId)
+	//if !ok {
+	//	log.WithFields(log.Fields{
+	//		"peer id": nId,
+	//	}).Error("upload shard get addr error")
+	//	cst.ConsumeTkSub()
+	//	goto startup
+	//}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
 	//defer cancel()
@@ -132,7 +133,7 @@ startup:
 		goto startup
 	}
 
-	nst.SendSuccAdd(nId)
+	//nst.SendSuccAdd(nId)
 	nst.SendDelay(nId, time.Now().Sub(ssTime))
 	cst.SendccSub()
 	cst.ConsumeTkSub()
@@ -148,6 +149,8 @@ startup:
 
 		goto startup
 	}
+
+	nst.SendSuccAdd(nId)
 
 	log.WithFields(log.Fields{
 		"filename": fName,

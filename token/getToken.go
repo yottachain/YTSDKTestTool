@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/multiformats/go-multiaddr"
 	log "github.com/sirupsen/logrus"
 	"github.com/yottachain/YTDataNode/message"
 	hi "github.com/yottachain/YTHost/hostInterface"
@@ -16,11 +17,16 @@ import (
 
 type IdToToken struct {
 	pid peer.ID
+	addrs []multiaddr.Multiaddr
 	tk *message.NodeCapacityResponse
 }
 
 func (idt *IdToToken) GetPid () peer.ID{
 	return idt.pid
+}
+
+func (idt *IdToToken) GetAddrs () []multiaddr.Multiaddr{
+	return idt.addrs
 }
 
 func (idt *IdToToken) GetToken () *message.NodeCapacityResponse{
@@ -94,7 +100,6 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 	}
 
 	cst.GtccAdd()
-
 	ctx1, cal := context.WithTimeout(context.Background(), time.Second*1)
 	defer cal()
 	ssTime := time.Now()
@@ -110,7 +115,8 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 		return
 	}
 
-	nst.GtDelay(nId, time.Now().Sub(ssTime))
+	dly := time.Now().Sub(ssTime)
+	nst.GtDelay(nId, dly)
 
 	var resGetToken message.NodeCapacityResponse
 	err = proto.Unmarshal(res[2:], &resGetToken)
@@ -120,6 +126,7 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 			"err": err,
 		}).Error("get token response proto Unmarshal error")
 
+		nst.GtErrAdd(nId)
 		cst.GtccSub()
 		return
 	}
@@ -146,7 +153,7 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 
 	if tkpoolLen < cap(tkpool) {
 		cst.SetTkPoolLen(tkpoolLen)
-		tkpool <- &IdToToken{nId, &resGetToken}
+		tkpool <- &IdToToken{nId, addrs, &resGetToken}
 	}
 	tpl.Unlock()
 

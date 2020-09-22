@@ -37,9 +37,9 @@ const (
 var remainfs uint32 = 0
 var m5 = md5.New()
 
-func NewFileMage(fcc uint, fn uint, fs int, datasrcName string) ([] *File, error) {
-	files := make([] *File, fcc)
-	for i := uint(0); i < fcc; i++ {
+func NewFileMage(fn uint, fs int, datasrcName string) ([] *File, error) {
+	files := make([] *File, fn)
+	for i := uint(0); i < fn; i++ {
 		log.Printf("file_%d init\n", i)
 		files[i] = &File{}
 		err := files[i].FileInit(fs, datasrcName)
@@ -47,10 +47,6 @@ func NewFileMage(fcc uint, fn uint, fs int, datasrcName string) ([] *File, error
 			return nil, err
 		}
 	}
-
-	remainfs = uint32(fn - fcc)
-
-	//go AppendFiles(&files, fs, datasrcName)
 
 	return files, nil
 }
@@ -129,6 +125,10 @@ func (f *File) IsUnuse() bool {
 	return f.upStatus == UPUNUSE
 }
 
+func (f *File) SetInit() {
+	f.upStatus = UPINIT
+}
+
 func (f *File) SetUnuse() {
 	f.upStatus = UPUNUSE
 }
@@ -155,7 +155,7 @@ func (f *File) FilePrintInfo() {
 	}).Info("file base info")
 }
 
-func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{},
+func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, fQ chan struct{}, blkQ chan struct{}, shdQ chan struct{},
 			tkpool chan *tk.IdToToken, shardSucs int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat) {
 	f.SetUsed()
 	log.WithFields(log.Fields{
@@ -174,6 +174,7 @@ func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, sh
 		<- time.After(100*time.Millisecond)
 		f.CheckUploaded()
 		if f.IsUpFinish() {
+			<- fQ
 			break
 		}
 	}

@@ -12,6 +12,7 @@ import (
 )
 
 type uploads struct {
+	fQueue		chan struct{}
 	blkQueue	chan struct{}
 	shardQueue	chan struct{}
 	gtkQueue 	chan struct{}
@@ -24,8 +25,9 @@ type uploads struct {
 	totalfs		uint
 }
 
-func NewUploads(files [] *f.File, bcc uint, scc uint, gtcc uint, fsize uint, shardSucs uint, dataSrcName string, totalfs uint) *uploads {
+func NewUploads(files [] *f.File, fcc uint, bcc uint, scc uint, gtcc uint, fsize uint, shardSucs uint, dataSrcName string, totalfs uint) *uploads {
 	return &uploads{
+		make(chan struct{}, fcc),
 		make(chan struct{}, bcc),
 		make(chan struct{}, scc),
 		make(chan struct{}, gtcc),
@@ -45,7 +47,8 @@ func (ups *uploads) FileUpload(hst hi.Host, ab *cm.AddrsBook, wg *sync.WaitGroup
 	for {
 		for _, v := range ups.files {
 			if v.IsUnuse() {
-				go v.BlockUpload(hst, ab, ups.blkQueue, ups.shardQueue, ups.tkPool, int(ups.shardSucs), wg, cst, nst)
+				ups.fQueue <- struct{}{}
+				go v.BlockUpload(hst, ab, ups.fQueue, ups.blkQueue, ups.shardQueue, ups.tkPool, int(ups.shardSucs), wg, cst, nst)
 			}
 		}
 
@@ -53,23 +56,24 @@ func (ups *uploads) FileUpload(hst hi.Host, ab *cm.AddrsBook, wg *sync.WaitGroup
 		<- time.After(100*time.Millisecond)
 		for _, v := range ups.files {
 			if v.IsUpFinish() {
-				v.FilePrintInfo()
+				//v.FilePrintInfo()
+				v.SetInit()
 				ups.FileAddSuc(1)
 				if ups.upSucfiles >= int(ups.totalfs) {
 					break
 				}
 				//v.SetUnuse()
 				//v.AppendFiles(int(ups.fsize), ups.dataSrcName)
-				err := ups.AppendFile(int(ups.fsize), ups.dataSrcName)
-				if err != nil {
-					log.Fatalf("ups append file fail, error=%s", err.Error())
-				}
+				//err := ups.AppendFile(int(ups.fsize), ups.dataSrcName)
+				//if err != nil {
+				//	log.Fatalf("ups append file fail, error=%s", err.Error())
+				//}
 			}
 		}
 
 		log.WithFields(log.Fields{
 			"upSucfiles":ups.upSucfiles,
-		}).Info("-------------")
+		}).Info("upload Suc files")
 
 		if ups.upSucfiles >= int(ups.totalfs) {
 			break
