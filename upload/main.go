@@ -30,7 +30,9 @@ func main()  {
 	var codeType string
 	var divisor uint
 	var openstat *bool
+	var openTkPool *bool
 	var wgdivisor int
+	var nodeShards int
 
 	flag.StringVar(&listenaddr, "l", "/ip4/0.0.0.0/tcp/9003", "监听地址")
 	flag.UintVar(&filecc, "fcc", 5, "上传文件的并发")
@@ -45,7 +47,9 @@ func main()  {
 	flag.StringVar(&codeType, "sn", "java", "sn类型，java版本还是go版本")
 	flag.UintVar(&divisor, "div", 2, "选择所有节点的1/div的数量作为发送节点, 默认是2也就是选取一半的节点")
 	flag.IntVar(&wgdivisor, "wgdiv", 10, "矿机权重命中概率因子")
+	flag.IntVar(&nodeShards, "ns", 8, "每个矿机存储块的最大分片数")
 	openstat = flag.Bool("os", false, "是否开启成功率等相关统计")
+	openTkPool = flag.Bool("otp", false, "是否开启token池")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -54,6 +58,7 @@ func main()  {
 		"divisor": divisor,
 		"wgdivisor": wgdivisor,
 		"openstat": *openstat,
+		"openTkPool": *openTkPool,
 		"files": files,
 		"filesize": filesize,
 		"shardeds": shardeds,
@@ -63,6 +68,7 @@ func main()  {
 		"shardcc": shardcc,
 		"miners": miners,
 		"sn": codeType,
+		"ns": nodeShards,
 	}).Info("args info")
 
 	runtime.GOMAXPROCS(16)
@@ -108,10 +114,12 @@ func main()  {
 
 	ups := NewUploads(fs, filecc, blockcc, shardcc, gtkcc, filesize, shardeds, dataOringin, files)
 	var IsStop = false
-	go tk.GetTkToPool(hst, ab, ups.gtkQueue, ups.tkPool, &IsStop, &wg1, cst, nst)
+	if *openTkPool == true {
+		go tk.GetTkToPool(hst, ab, ups.gtkQueue, ups.tkPool, &IsStop, &wg1, cst, nst)
+	}
 
 	upStartTime := time.Now()
-	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst)
+	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst, nodeShards, *openTkPool)
 	//log.WithFields(log.Fields{
 	//}).Info("indatabase upload success")
 

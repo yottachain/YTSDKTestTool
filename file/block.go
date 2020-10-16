@@ -1,6 +1,7 @@
 package file
 
 import (
+	"github.com/libp2p/go-libp2p-core/peer"
 	log "github.com/sirupsen/logrus"
 	hi "github.com/yottachain/YTHost/hostInterface"
 	tk "github.com/yottachain/YTSDKTestTool/token"
@@ -23,6 +24,8 @@ type block struct {
 	shards  [] *shard
 	upStatus blkUpstatus
 	shardSucs int	//上传分片成功的数量
+	nodeShards map[peer.ID] int
+	sync.Mutex
 }
 
 func (blk *block) GetUploadStatus() blkUpstatus {
@@ -46,7 +49,8 @@ func (blk *block) IsUploaded() bool {
 }
 
 func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{},
-	tkpool chan *tk.IdToToken, blkSucShards int, fName string, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat) {
+	tkpool chan *tk.IdToToken, blkSucShards int, fName string, wg *sync.WaitGroup,
+	cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool) {
 	blk.SetUploading()
 	log.WithFields(log.Fields{
 		"fileName": fName,
@@ -56,7 +60,12 @@ func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{},
 	for _, v := range blk.shards {
 		if v.IsUnUpload() {
 			shdQ <- struct{}{}
-			go v.Upload(hst, ab, shdQ, tkpool, fName, blk.bNum, wg, cst, nst)
+			if openTkPool {
+				go v.Upload(hst, ab, shdQ, tkpool, fName, blk.bNum, wg, cst, nst)
+			}else {
+				go v.UploadBK(hst, ab, shdQ, fName, blk.bNum, wg, cst, nst, nodeshs)
+			}
+
 		}
 	}
 

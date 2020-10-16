@@ -42,13 +42,14 @@ func NewUploads(files [] *f.File, fcc uint, bcc uint, scc uint, gtcc uint, fsize
 }
 
 func (ups *uploads) FileUpload(hst hi.Host, ab *cm.AddrsBook, wg *sync.WaitGroup, cst *st.Ccstat,
-				nst *st.NodeStat) time.Duration {
+				nst *st.NodeStat, nodeshs int, openTkPool bool) time.Duration {
 	startTime := time.Now()
 	for {
 		for _, v := range ups.files {
 			if v.IsUnuse() {
 				ups.fQueue <- struct{}{}
-				go v.BlockUpload(hst, ab, ups.fQueue, ups.blkQueue, ups.shardQueue, ups.tkPool, int(ups.shardSucs), wg, cst, nst)
+				go v.BlockUpload(hst, ab, ups.fQueue, ups.blkQueue, ups.shardQueue, ups.tkPool,
+					int(ups.shardSucs), wg, cst, nst, nodeshs, openTkPool)
 			}
 		}
 

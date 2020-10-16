@@ -100,6 +100,8 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 	}
 
 	cst.GtccAdd()
+	cst.GtsAdd()
+
 	ctx1, cal := context.WithTimeout(context.Background(), time.Second*1)
 	defer cal()
 	ssTime := time.Now()
@@ -143,6 +145,7 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 
 	nst.GtSuccAdd(nId)
 	cst.GtccSub()
+	cst.GtSucsAdd()
 
 	tpl.Lock()
 	tkpoolLen := len(tkpool)

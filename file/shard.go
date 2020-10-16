@@ -21,6 +21,7 @@ type shard struct {
 	vhf 	[] byte
 	bs58Vhf string
 	upstatus shardUpstatus
+	blk 	*block
 }
 
 type shardUpstatus int
@@ -45,15 +46,6 @@ startup:
 	cst.ConsumeTkAdd()
 	nId := token.GetPid()
 	addrs := token.GetAddrs()
-
-	//addrs, ok := ab.Get(nId)
-	//if !ok {
-	//	log.WithFields(log.Fields{
-	//		"peer id": nId,
-	//	}).Error("upload shard get addr error")
-	//	cst.ConsumeTkSub()
-	//	goto startup
-	//}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
 	//defer cancel()
@@ -81,11 +73,6 @@ startup:
 
 	nst.ConnSuccAdd(nId)
 
-	//m5 := md5.New()
-	//m5.Reset()
-	//m5.Write(sh.sh)
-	//var vhf = m5.Sum(nil)
-	//var b58vhf = base58.Encode(vhf)
 	var uploadReqMsg message.UploadShardRequestTest
 
 	uploadReqMsg.AllocId = token.GetToken().AllocId
@@ -102,14 +89,6 @@ startup:
 		cst.ConsumeTkSub()
 		goto startup
 	}
-
-	//log.WithFields(log.Fields{
-	//	"filename": fName,
-	//	"block": blkNum,
-	//	"shard": sh.sNum,
-	//	"VHF": sh.bs58Vhf,
-	//	"miner": peer.Encode(nId),
-	//}).Info("shard uploading")
 
 	cst.SendccAdd()
 	cst.IdccAdd(nId)
@@ -165,7 +144,7 @@ startup:
 }
 
 func (sh *shard) UploadBK(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
-	tkpool chan *tk.IdToToken, fName string, blkNum int, wg *sync.WaitGroup) {
+		fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, nodeshs int) {
 	sh.SetUploading()
 	wg.Add(1)
 	defer func() {
@@ -181,8 +160,20 @@ startup:
 		goto startup
 	}
 	idx := r.Intn(abLen)
-	//log.WithFields(log.Fields{"lenth": abLen, "index": idx,}).Info("addrs list lenth")
+
 	nId := ab.GetWeightId(idx)
+	sh.blk.Lock()
+	_, ok := sh.blk.nodeShards[nId]
+	if ok {
+		if sh.blk.nodeShards[nId] >= nodeshs {
+			sh.blk.Unlock()
+			goto startup
+		}
+		sh.blk.Unlock()
+	}else {
+		sh.blk.Unlock()
+	}
+
 	addrs, ok := ab.Get(nId)
 	if !ok {
 		log.WithFields(log.Fields{
@@ -206,9 +197,12 @@ startup:
 			"addrs": sAddrs,
 		}).Error(err)
 
+		nst.ConnErrAdd(nId)
 		cancel()
 		goto startup
 	}
+
+	nst.ConnSuccAdd(nId)
 
 	var getToken message.NodeCapacityRequest
 	getTokenData, err := proto.Marshal(&getToken)
@@ -219,6 +213,10 @@ startup:
 		goto startup
 	}
 
+	cst.GtccAdd()
+	cst.GtsAdd()
+
+	ssTime := time.Now()
 	ctx1, cal := context.WithTimeout(context.Background(), time.Second*1)
 	res, err := clt.SendMsg(ctx1, message.MsgIDNodeCapacityRequest.Value(), getTokenData)
 	if err != nil {
@@ -227,8 +225,15 @@ startup:
 		}).Error("get token fail")
 
 		cal()
+		cst.GtccSub()
+		nst.GtDelay(nId, time.Now().Sub(ssTime))
+		nst.GtErrAdd(nId)
+
 		goto startup
 	}
+
+	dly := time.Now().Sub(ssTime)
+	nst.GtDelay(nId, dly)
 
 	var resGetToken message.NodeCapacityResponse
 	err = proto.Unmarshal(res[2:], &resGetToken)
@@ -237,10 +242,14 @@ startup:
 			"nodeid": peer.Encode(nId),
 			"err": err,
 		}).Error("get token response proto Unmarshal error")
+		cst.GtccSub()
+		nst.GtErrAdd(nId)
 		goto startup
 	}
 
 	if !resGetToken.Writable  {
+		cst.GtccSub()
+		nst.GtErrAdd(nId)
 		goto startup
 	}else {
 		log.WithFields(log.Fields{
@@ -248,11 +257,10 @@ startup:
 		}).Info("获取token成功")
 	}
 
-	//m5 := md5.New()
-	//m5.Reset()
-	//m5.Write(sh.sh)
-	//var vhf = m5.Sum(nil)
-	//var b58vhf = base58.Encode(vhf)
+	nst.GtSuccAdd(nId)
+	cst.GtccSub()
+	cst.GtSucsAdd()
+
 	var uploadReqMsg message.UploadShardRequestTest
 
 	uploadReqMsg.AllocId = resGetToken.AllocId
@@ -277,6 +285,10 @@ startup:
 		"miner": peer.Encode(nId),
 	}).Info("shard uploading")
 
+	cst.SendccAdd()
+	cst.IdccAdd(nId)
+
+	ssTime = time.Now()
 	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
 	defer cancel2()
 	res, err = clt.SendMsg(ctx2, message.MsgIDSleepReturn.Value(), uploadReqData)
@@ -286,8 +298,18 @@ startup:
 			"err":    err,
 		}).Error("message send error")
 
+		nst.SendDelay(nId, time.Now().Sub(ssTime))
+		nst.SendErrAdd(nId)
+		cst.SendccSub()
+		cst.IdccSub(nId)
+
 		goto startup
 	}
+
+	nst.SendDelay(nId, time.Now().Sub(ssTime))
+	cst.SendccSub()
+	cst.IdccSub(nId)
+	nst.SendSuccAdd(nId)
 
 	var resmsg message.UploadShardResponse
 	err = proto.Unmarshal(res[2:], &resmsg)
@@ -307,6 +329,15 @@ startup:
 		"VHF": sh.bs58Vhf,
 		"miner": peer.Encode(nId),
 	}).Info("shard uploaded")
+
+	sh.blk.Lock()
+	_, ok = sh.blk.nodeShards[nId]
+	if ok {
+		sh.blk.nodeShards[nId] = sh.blk.nodeShards[nId] + 1
+	}else {
+		sh.blk.nodeShards[nId] = 1
+	}
+	sh.blk.Unlock()
 
 	sh.SetUploaded()
 	<-shdQ
