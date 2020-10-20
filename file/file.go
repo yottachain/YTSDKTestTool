@@ -6,7 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/mr-tron/base58"
 	log "github.com/sirupsen/logrus"
-	hi "github.com/yottachain/YTHost/hostInterface"
+	hi "github.com/yottachain/YTHost/interface"
 	"github.com/yottachain/YTSDKTestTool/rand"
 	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"

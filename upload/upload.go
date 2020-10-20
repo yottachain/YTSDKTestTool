@@ -2,7 +2,7 @@ package main
 
 import (
 	log "github.com/sirupsen/logrus"
-	hi "github.com/yottachain/YTHost/hostInterface"
+	hi "github.com/yottachain/YTHost/interface"
 	f "github.com/yottachain/YTSDKTestTool/file"
 	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"

@@ -7,7 +7,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	log "github.com/sirupsen/logrus"
 	"github.com/yottachain/YTDataNode/message"
-	hi "github.com/yottachain/YTHost/hostInterface"
+	hi "github.com/yottachain/YTHost/interface"
 	cm "github.com/yottachain/YTStTool/ClientManage"
 	st "github.com/yottachain/YTStTool/stat"
 	"math/rand"
