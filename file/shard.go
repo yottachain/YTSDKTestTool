@@ -283,7 +283,7 @@ startup:
 		"shard": sh.sNum,
 		"VHF": sh.bs58Vhf,
 		"miner": peer.Encode(nId),
-	}).Info("shard uploading")
+	}).Info("uploadbk shard uploading")
 
 	cst.SendccAdd()
 	cst.IdccAdd(nId)
