@@ -177,8 +177,10 @@ func (sh *shard) nodeShardsSub(nId peer.ID) {
 func (sh *shard) UploadBK(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
 		fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, nodeshs int) {
 	sh.SetUploading()
+	cst.ShccAdd()
 	wg.Add(1)
 	defer func() {
+		cst.ShccSub()
 		wg.Done()
 	}()
 

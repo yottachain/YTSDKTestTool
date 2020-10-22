@@ -10,5 +10,5 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/yottachain/YTDataNode v0.0.0-20200723110532-6769d146eef0
 	github.com/yottachain/YTHost v1.0.2-0.20200927101531-639a442df732
-	github.com/yottachain/YTStTool v0.0.0-20200923080644-6826bea41c6e
+	github.com/yottachain/YTStTool v0.0.0-20201022040047-a411f1db7d71
 )
