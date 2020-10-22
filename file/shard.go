@@ -143,6 +143,37 @@ startup:
 	<-shdQ
 }
 
+func (sh *shard) IsNidAvailable(nId peer.ID, nodeshs int) bool {
+	sh.blk.Lock()
+	_, ok := sh.blk.nodeShards[nId]
+	if ok {
+		if sh.blk.nodeShards[nId] >= nodeshs {
+			sh.blk.Unlock()
+			return false
+		}
+		sh.blk.nodeShards[nId] = sh.blk.nodeShards[nId] + 1
+		sh.blk.Unlock()
+	}else {
+		sh.blk.nodeShards[nId] = 1
+		sh.blk.Unlock()
+	}
+
+	return true
+}
+
+func (sh *shard) nodeShardsSub(nId peer.ID) {
+	sh.blk.Lock()
+	_, ok := sh.blk.nodeShards[nId]
+	if ok {
+		if sh.blk.nodeShards[nId] <= 0 {
+			sh.blk.Unlock()
+			return
+		}
+		sh.blk.nodeShards[nId] = sh.blk.nodeShards[nId] - 1
+	}
+	sh.blk.Unlock()
+}
+
 func (sh *shard) UploadBK(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
 		fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, nodeshs int) {
 	sh.SetUploading()
@@ -160,18 +191,10 @@ startup:
 		goto startup
 	}
 	idx := r.Intn(abLen)
-
 	nId := ab.GetWeightId(idx)
-	sh.blk.Lock()
-	_, ok := sh.blk.nodeShards[nId]
-	if ok {
-		if sh.blk.nodeShards[nId] >= nodeshs {
-			sh.blk.Unlock()
-			goto startup
-		}
-		sh.blk.Unlock()
-	}else {
-		sh.blk.Unlock()
+
+	if !sh.IsNidAvailable(nId, nodeshs) {
+		goto startup
 	}
 
 	addrs, ok := ab.Get(nId)
@@ -179,6 +202,7 @@ startup:
 		log.WithFields(log.Fields{
 			"peer id": nId,
 		}).Error("get addr error")
+		sh.nodeShardsSub(nId)
 		goto startup
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
@@ -199,6 +223,8 @@ startup:
 
 		nst.ConnErrAdd(nId)
 		cancel()
+
+		sh.nodeShardsSub(nId)
 		goto startup
 	}
 
@@ -210,6 +236,7 @@ startup:
 		log.WithFields(log.Fields{
 			"err": err,
 		}).Error("request proto marshal error")
+		sh.nodeShardsSub(nId)
 		goto startup
 	}
 
@@ -229,6 +256,7 @@ startup:
 		nst.GtDelay(nId, time.Now().Sub(ssTime))
 		nst.GtErrAdd(nId)
 
+		sh.nodeShardsSub(nId)
 		goto startup
 	}
 
@@ -244,12 +272,16 @@ startup:
 		}).Error("get token response proto Unmarshal error")
 		cst.GtccSub()
 		nst.GtErrAdd(nId)
+
+		sh.nodeShardsSub(nId)
 		goto startup
 	}
 
 	if !resGetToken.Writable  {
 		cst.GtccSub()
 		nst.GtErrAdd(nId)
+
+		sh.nodeShardsSub(nId)
 		goto startup
 	}else {
 		log.WithFields(log.Fields{
@@ -274,6 +306,8 @@ startup:
 			"err": err,
 			"miner": peer.Encode(nId),
 		}).Error("upload request proto marshal error")
+
+		sh.nodeShardsSub(nId)
 		goto startup
 	}
 
@@ -303,6 +337,7 @@ startup:
 		cst.SendccSub()
 		cst.IdccSub(nId)
 
+		sh.nodeShardsSub(nId)
 		goto startup
 	}
 
@@ -319,6 +354,7 @@ startup:
 			"err": err,
 		}).Error("msg response proto Unmarshal error")
 
+		sh.nodeShardsSub(nId)
 		goto startup
 	}
 
@@ -329,15 +365,6 @@ startup:
 		"VHF": sh.bs58Vhf,
 		"miner": peer.Encode(nId),
 	}).Info("shard uploaded")
-
-	sh.blk.Lock()
-	_, ok = sh.blk.nodeShards[nId]
-	if ok {
-		sh.blk.nodeShards[nId] = sh.blk.nodeShards[nId] + 1
-	}else {
-		sh.blk.nodeShards[nId] = 1
-	}
-	sh.blk.Unlock()
 
 	sh.SetUploaded()
 	<-shdQ
