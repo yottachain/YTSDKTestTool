@@ -9,6 +9,6 @@ require (
 	github.com/multiformats/go-multiaddr v0.2.2
 	github.com/sirupsen/logrus v1.6.0
 	github.com/yottachain/YTDataNode v0.0.0-20200723110532-6769d146eef0
-	github.com/yottachain/YTHost v1.0.2-0.20201022103413-d4ff3cab84de
+	github.com/yottachain/YTHost v1.0.2-0.20201023062655-e643e1e6a45e
 	github.com/yottachain/YTStTool v0.0.0-20201022110313-3e19e90a3129
 )

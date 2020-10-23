@@ -32,6 +32,7 @@ func main()  {
 	var divisor uint
 	var openstat *bool
 	var openTkPool *bool
+	var connNowait *bool
 	var wgdivisor int
 	var nodeShards int
 
@@ -51,6 +52,7 @@ func main()  {
 	flag.IntVar(&nodeShards, "ns", 8, "每个矿机存储块的最大分片数")
 	openstat = flag.Bool("os", false, "是否开启成功率等相关统计")
 	openTkPool = flag.Bool("otp", false, "是否开启token池")
+	connNowait = flag.Bool("cnw", false, "与节点建立连接是否等待")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -60,6 +62,7 @@ func main()  {
 		"wgdivisor": wgdivisor,
 		"openstat": *openstat,
 		"openTkPool": *openTkPool,
+		"connNowait": *connNowait,
 		"files": files,
 		"filesize": filesize,
 		"shardeds": shardeds,
@@ -73,6 +76,8 @@ func main()  {
 	}).Info("args info")
 
 	runtime.GOMAXPROCS(16)
+	runtime.SetMutexProfileFraction(1)
+	runtime.SetBlockProfileRate(1)
 
 	log.WithFields(log.Fields{
 		"rt_cpus":runtime.NumCPU(),
@@ -86,7 +91,7 @@ func main()  {
 	if err != nil {
 		log.Fatal(err)
 	}
-	hst, err := host.NewHost(option.ListenAddr(lsma))
+	hst, err := host.NewHost(option.ListenAddr(lsma), option.OpenPProf("0.0.0.0:10000"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -118,11 +123,11 @@ func main()  {
 	ups := NewUploads(fs, filecc, blockcc, shardcc, gtkcc, filesize, shardeds, dataOringin, files)
 	var IsStop = false
 	if *openTkPool == true {
-		go tk.GetTkToPool(hst, ab, ups.gtkQueue, ups.tkPool, &IsStop, &wg1, cst, nst)
+		go tk.GetTkToPool(hst, ab, ups.gtkQueue, ups.tkPool, &IsStop, &wg1, cst, nst, *connNowait)
 	}
 
 	upStartTime := time.Now()
-	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst, nodeShards, *openTkPool, dst)
+	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst, nodeShards, *openTkPool, dst, *connNowait)
 	//log.WithFields(log.Fields{
 	//}).Info("indatabase upload success")
 

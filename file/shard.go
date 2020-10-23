@@ -6,7 +6,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	log "github.com/sirupsen/logrus"
 	"github.com/yottachain/YTDataNode/message"
+	"github.com/yottachain/YTHost/client"
 	hi "github.com/yottachain/YTHost/interface"
+	"github.com/yottachain/YTSDKTestTool/conn"
 	"github.com/yottachain/YTSDKTestTool/stat"
 	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
@@ -34,7 +36,8 @@ const (
 )
 
 func (sh *shard) Upload(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
-	tkpool chan *tk.IdToToken, fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat) {
+	tkpool chan *tk.IdToToken, fName string, blkNum int,
+	wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, connNowait bool) {
 	sh.SetUploading()
 	wg.Add(1)
 	defer func() {
@@ -47,28 +50,38 @@ startup:
 	nId := token.GetPid()
 	addrs := token.GetAddrs()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
-	//defer cancel()
-
-	clt, err := hst.ClientStore().Get(ctx, nId, addrs)
-	if err != nil {
-		ADDRs := make([]string, len(addrs))
-		for k, m := range addrs {
-			ADDRs[k] = m.String()
+	var clt *client.YTHostClient
+	if connNowait {
+		clt = hst.ClientStore().GetUsePid(nId)
+		if clt == nil {
+			go conn.Connect(hst, nId, addrs)
+			nst.ConnErrAdd(nId)
+			cst.ConsumeTkSub()
+			goto startup
 		}
-		var sAddrs string
-		for _, v := range ADDRs {
-			sAddrs = sAddrs + v + " "
-		}
-		log.WithFields(log.Fields{
-			"nodeid": peer.Encode(nId),
-			"addrs": sAddrs,
-		}).Error("upload shard connect error=", err)
+	}else {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
+		clt, err := hst.ClientStore().Get(ctx, nId, addrs)
+		if clt == nil || err != nil {
+			ADDRs := make([]string, len(addrs))
+			for k, m := range addrs {
+				ADDRs[k] = m.String()
+			}
+			var sAddrs string
+			for _, v := range ADDRs {
+				sAddrs = sAddrs + v + " "
+			}
+			log.WithFields(log.Fields{
+				"nodeid": peer.Encode(nId),
+				"addrs":  sAddrs,
+			}).Error("upload shard connect error=", err)
 
-		nst.ConnErrAdd(nId)
-		cst.ConsumeTkSub()
-		cancel()
-		goto startup
+			nst.ConnErrAdd(nId)
+			cst.ConsumeTkSub()
+			cancel()
+
+			goto startup
+		}
 	}
 
 	nst.ConnSuccAdd(nId)
@@ -170,8 +183,8 @@ func (sh *shard) nodeShardsSub(nId peer.ID) {
 	}
 }
 
-func (sh *shard) UploadBK(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
-		fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, nodeshs int, dst *stat.DelayStat) {
+func (sh *shard) UploadBK(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{}, fName string, blkNum int,
+			wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, nodeshs int, dst *stat.DelayStat, connNowait bool) {
 	sh.SetUploading()
 	cst.ShccAdd()
 	wg.Add(1)
@@ -216,29 +229,43 @@ startup:
 
 		goto startup
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
-	clt, err := hst.ClientStore().Get(ctx, nId, addrs)
-	if err != nil {
-		ADDRs := make([]string, len(addrs))
-		for k, m := range addrs {
-			ADDRs[k] = m.String()
+
+	var clt *client.YTHostClient
+	if connNowait {
+		clt = hst.ClientStore().GetUsePid(nId)
+		if clt == nil {
+			go conn.Connect(hst, nId, addrs)
+
+			nst.ConnErrAdd(nId)
+			sh.nodeShardsSub(nId)
+			getNstartT = time.Now()		//这个时间要重置
+			goto startup
 		}
-		var sAddrs string
-		for _, v := range ADDRs {
-			sAddrs = sAddrs + v + " "
+	}else {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
+		clt, err := hst.ClientStore().Get(ctx, nId, addrs)
+		if clt == nil || err != nil {
+			ADDRs := make([]string, len(addrs))
+			for k, m := range addrs {
+				ADDRs[k] = m.String()
+			}
+			var sAddrs string
+			for _, v := range ADDRs {
+				sAddrs = sAddrs + v + " "
+			}
+			log.WithFields(log.Fields{
+				"nodeid": peer.Encode(nId),
+				"addrs":  sAddrs,
+			}).Error(err)
+
+			nst.ConnErrAdd(nId)
+			cancel()
+
+			sh.nodeShardsSub(nId)
+			getNstartT = time.Now() //这个时间要重置
+
+			goto startup
 		}
-		log.WithFields(log.Fields{
-			"nodeid": peer.Encode(nId),
-			"addrs": sAddrs,
-		}).Error(err)
-
-		nst.ConnErrAdd(nId)
-		cancel()
-
-		sh.nodeShardsSub(nId)
-		getNstartT = time.Now()		//这个时间要重置
-
-		goto startup
 	}
 
 	nst.ConnSuccAdd(nId)

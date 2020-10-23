@@ -51,7 +51,7 @@ func (blk *block) IsUploaded() bool {
 
 func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{},
 	tkpool chan *tk.IdToToken, blkSucShards int, fName string, wg *sync.WaitGroup,
-	cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool, dst *stat.DelayStat) {
+	cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool, dst *stat.DelayStat, connNowait bool) {
 	blk.SetUploading()
 	log.WithFields(log.Fields{
 		"fileName": fName,
@@ -62,9 +62,9 @@ func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{},
 		if v.IsUnUpload() {
 			shdQ <- struct{}{}
 			if openTkPool {
-				go v.Upload(hst, ab, shdQ, tkpool, fName, blk.bNum, wg, cst, nst)
+				go v.Upload(hst, ab, shdQ, tkpool, fName, blk.bNum, wg, cst, nst, connNowait)
 			}else {
-				go v.UploadBK(hst, ab, shdQ, fName, blk.bNum, wg, cst, nst, nodeshs, dst)
+				go v.UploadBK(hst, ab, shdQ, fName, blk.bNum, wg, cst, nst, nodeshs, dst, connNowait)
 			}
 
 		}

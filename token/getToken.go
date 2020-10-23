@@ -7,7 +7,9 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	log "github.com/sirupsen/logrus"
 	"github.com/yottachain/YTDataNode/message"
+	"github.com/yottachain/YTHost/client"
 	hi "github.com/yottachain/YTHost/interface"
+	"github.com/yottachain/YTSDKTestTool/conn"
 	cm "github.com/yottachain/YTStTool/ClientManage"
 	st "github.com/yottachain/YTStTool/stat"
 	"math/rand"
@@ -34,7 +36,7 @@ func (idt *IdToToken) GetToken () *message.NodeCapacityResponse{
 }
 
 func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *IdToToken,
-			wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, tpl *sync.Mutex) {
+			wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, tpl *sync.Mutex, connNowait bool) {
 	defer func() {
 		<- gtkQ
 		wg.Done()
@@ -63,25 +65,36 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 		}).Error("get addr error")
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
-	defer cancel()
-	clt, err := hst.ClientStore().Get(ctx, nId, addrs)
-	if err != nil {
-		ADDRs := make([]string, len(addrs))
-		for k, m := range addrs {
-			ADDRs[k] = m.String()
-		}
-		var sAddrs string
-		for _, v := range ADDRs {
-			sAddrs = sAddrs + v + " "
-		}
-		log.WithFields(log.Fields{
-			"nodeid": peer.Encode(nId),
-			"addrs": sAddrs,
-		}).Error("connect fail error=", err)
 
-		nst.ConnErrAdd(nId)
-		return
+	var clt *client.YTHostClient
+	if connNowait {
+		clt = hst.ClientStore().GetUsePid(nId)
+		if clt == nil {
+			go conn.Connect(hst, nId, addrs)
+			nst.ConnErrAdd(nId)
+			return
+		}
+	}else {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
+		defer cancel()
+		clt, err := hst.ClientStore().Get(ctx, nId, addrs)
+		if clt == nil || err != nil {
+			ADDRs := make([]string, len(addrs))
+			for k, m := range addrs {
+				ADDRs[k] = m.String()
+			}
+			var sAddrs string
+			for _, v := range ADDRs {
+				sAddrs = sAddrs + v + " "
+			}
+			log.WithFields(log.Fields{
+				"nodeid": peer.Encode(nId),
+				"addrs":  sAddrs,
+			}).Error("get token connect fail error=", err)
+
+			nst.ConnErrAdd(nId)
+			return
+		}
 	}
 
 	nst.ConnSuccAdd(nId)
@@ -161,13 +174,13 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 
 
 func GetTkToPool(hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{},
-				tkPool chan *IdToToken, isStop *bool, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat) {
+				tkPool chan *IdToToken, isStop *bool, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, connNowait bool) {
 	tKPoollck := &sync.Mutex{}
 	for {
 		if *isStop {
 			break
 		}
 		gtkQ <- struct{}{}
-		go gettoken(hst, ab, gtkQ, tkPool, wg, cst, nst, tKPoollck)
+		go gettoken(hst, ab, gtkQ, tkPool, wg, cst, nst, tKPoollck, connNowait)
 	}
 }
