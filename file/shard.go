@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/yottachain/YTDataNode/message"
 	hi "github.com/yottachain/YTHost/interface"
+	"github.com/yottachain/YTSDKTestTool/stat"
 	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
 	st "github.com/yottachain/YTStTool/stat"
@@ -25,7 +26,6 @@ type shard struct {
 }
 
 type shardUpstatus int
-var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 const (
 	SUNUPLOAD shardUpstatus = iota
@@ -145,37 +145,33 @@ startup:
 
 func (sh *shard) IsNidAvailable(nId peer.ID, nodeshs int) bool {
 	sh.blk.Lock()
+	defer sh.blk.Unlock()
 	_, ok := sh.blk.nodeShards[nId]
 	if ok {
 		if sh.blk.nodeShards[nId] >= nodeshs {
-			sh.blk.Unlock()
 			return false
 		}
 		sh.blk.nodeShards[nId] = sh.blk.nodeShards[nId] + 1
-		sh.blk.Unlock()
 	}else {
 		sh.blk.nodeShards[nId] = 1
-		sh.blk.Unlock()
 	}
-
 	return true
 }
 
 func (sh *shard) nodeShardsSub(nId peer.ID) {
 	sh.blk.Lock()
+	defer sh.blk.Unlock()
 	_, ok := sh.blk.nodeShards[nId]
 	if ok {
 		if sh.blk.nodeShards[nId] <= 0 {
-			sh.blk.Unlock()
 			return
 		}
 		sh.blk.nodeShards[nId] = sh.blk.nodeShards[nId] - 1
 	}
-	sh.blk.Unlock()
 }
 
 func (sh *shard) UploadBK(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
-		fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, nodeshs int) {
+		fName string, blkNum int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat, nodeshs int, dst *stat.DelayStat) {
 	sh.SetUploading()
 	cst.ShccAdd()
 	wg.Add(1)
@@ -184,7 +180,9 @@ func (sh *shard) UploadBK(hst hi.Host, ab *cm.AddrsBook, shdQ chan struct{},
 		wg.Done()
 	}()
 
+	getNstartT := time.Now()
 startup:
+	getNIdstartT := time.Now()
 	abLen := ab.GetWeightsLen()
 	if abLen == 0 {
 		log.WithFields(log.Fields{
@@ -192,19 +190,30 @@ startup:
 		}).Info("addrbook len error")
 		goto startup
 	}
+	var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 	idx := r.Intn(abLen)
 	nId := ab.GetWeightId(idx)
+	nst.SetWeight(nId, ab.GetIdWeight(nId))
 
+	dst.CalcDly(stat.GETNODEIDDEALY, time.Now().Sub(getNIdstartT))
+
+	getNastartT := time.Now()
 	if !sh.IsNidAvailable(nId, nodeshs) {
+		dst.CalcDly(stat.GETAVAILABLEDEALY, time.Now().Sub(getNastartT))
 		goto startup
 	}
+	dst.CalcDly(stat.GETAVAILABLEDEALY, time.Now().Sub(getNastartT))
+	dst.CalcDly(stat.GETNODEDELAY, time.Now().Sub(getNstartT))
 
 	addrs, ok := ab.Get(nId)
 	if !ok {
 		log.WithFields(log.Fields{
 			"peer id": nId,
 		}).Error("get addr error")
+
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
@@ -227,6 +236,8 @@ startup:
 		cancel()
 
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}
 
@@ -238,7 +249,10 @@ startup:
 		log.WithFields(log.Fields{
 			"err": err,
 		}).Error("request proto marshal error")
+
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}
 
@@ -259,6 +273,8 @@ startup:
 		nst.GtErrAdd(nId)
 
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}
 
@@ -276,6 +292,8 @@ startup:
 		nst.GtErrAdd(nId)
 
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}
 
@@ -284,6 +302,8 @@ startup:
 		nst.GtErrAdd(nId)
 
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}else {
 		log.WithFields(log.Fields{
@@ -310,6 +330,8 @@ startup:
 		}).Error("upload request proto marshal error")
 
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}
 
@@ -340,6 +362,8 @@ startup:
 		cst.IdccSub(nId)
 
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}
 
@@ -357,6 +381,8 @@ startup:
 		}).Error("msg response proto Unmarshal error")
 
 		sh.nodeShardsSub(nId)
+		getNstartT = time.Now()		//这个时间要重置
+
 		goto startup
 	}
 

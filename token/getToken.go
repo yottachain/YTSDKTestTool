@@ -52,9 +52,6 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 		return
 	}
 	idx := r.Intn(abLen)
-	//log.WithFields(log.Fields{
-	//	"index": idx,
-	//}).Error("get addr index")
 
 	nId := ab.GetWeightId(idx)
 	nst.SetWeight(nId, ab.GetIdWeight(nId))
@@ -109,6 +106,7 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 	if err != nil {
 		log.WithFields(log.Fields{
 			"nodeid": peer.Encode(nId),
+			"error": err,
 		}).Error("get token fail")
 
 		nst.GtDelay(nId, time.Now().Sub(ssTime))
@@ -136,6 +134,9 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 	if !resGetToken.Writable  {
 		nst.GtErrAdd(nId)
 		cst.GtccSub()
+		log.WithFields(log.Fields{
+			"nodeid": peer.Encode(nId),
+		}).Error("get token fail, token unavailable")
 		return
 	}else {
 		log.WithFields(log.Fields{
@@ -149,11 +150,6 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 
 	tpl.Lock()
 	tkpoolLen := len(tkpool)
-	//log.WithFields(log.Fields{
-	//	"cap": cap(tkpool),
-	//	"len": tkpoolLen,
-	//}).Info("token pool cap and len")
-
 	if tkpoolLen < cap(tkpool) {
 		cst.SetTkPoolLen(tkpoolLen)
 		tkpool <- &IdToToken{nId, addrs, &resGetToken}

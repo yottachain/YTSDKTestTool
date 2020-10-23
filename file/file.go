@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	hi "github.com/yottachain/YTHost/interface"
 	"github.com/yottachain/YTSDKTestTool/rand"
+	"github.com/yottachain/YTSDKTestTool/stat"
 	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
 	st "github.com/yottachain/YTStTool/stat"
@@ -158,7 +159,7 @@ func (f *File) FilePrintInfo() {
 
 func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, fQ chan struct{}, blkQ chan struct{}, shdQ chan struct{},
 			tkpool chan *tk.IdToToken, shardSucs int, wg *sync.WaitGroup,
-			cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool) {
+			cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool, dst *stat.DelayStat) {
 	f.SetUsed()
 	log.WithFields(log.Fields{
 		"filename": f.fileName,
@@ -168,7 +169,7 @@ func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, fQ chan struct{}, blkQ
 	for _, v := range f.blocks {
 		if v.IsUnupload() {
 			blkQ <- struct{}{}
-			go v.ShardUpload(hst, ab, blkQ, shdQ, tkpool, shardSucs, f.fileName, wg, cst, nst, nodeshs, openTkPool)
+			go v.ShardUpload(hst, ab, blkQ, shdQ, tkpool, shardSucs, f.fileName, wg, cst, nst, nodeshs, openTkPool, dst)
 		}
 	}
 

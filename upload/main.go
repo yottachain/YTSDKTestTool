@@ -7,6 +7,7 @@ import (
 	host "github.com/yottachain/YTHost"
 	"github.com/yottachain/YTHost/option"
 	f "github.com/yottachain/YTSDKTestTool/file"
+	stat "github.com/yottachain/YTSDKTestTool/stat"
 	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
 	st "github.com/yottachain/YTStTool/stat"
@@ -106,8 +107,10 @@ func main()  {
 	cst := st.NewCcStat()
 	nst := &st.NodeStat{}
 	nst.Init(*openstat)
+	dst := stat.NewDelaystat("delay.log")
 
 	go cst.Print()
+	go dst.Print()
 
 	wg := sync.WaitGroup{}
 	wg1 := sync.WaitGroup{}
@@ -119,7 +122,7 @@ func main()  {
 	}
 
 	upStartTime := time.Now()
-	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst, nodeShards, *openTkPool)
+	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst, nodeShards, *openTkPool, dst)
 	//log.WithFields(log.Fields{
 	//}).Info("indatabase upload success")
 
@@ -133,7 +136,7 @@ func main()  {
 
 	go cst.Print()
 	nst.Print()
-
+	dst.Clean()
 
 	connRate, gtRate, sendRate, gtAvg, sendAvg, gtTotalSuc, sendTotalSuc := nst.GetTotalStat()
 

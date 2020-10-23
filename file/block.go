@@ -4,6 +4,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	log "github.com/sirupsen/logrus"
 	hi "github.com/yottachain/YTHost/interface"
+	"github.com/yottachain/YTSDKTestTool/stat"
 	tk "github.com/yottachain/YTSDKTestTool/token"
 	cm "github.com/yottachain/YTStTool/ClientManage"
 	st "github.com/yottachain/YTStTool/stat"
@@ -50,7 +51,7 @@ func (blk *block) IsUploaded() bool {
 
 func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{},
 	tkpool chan *tk.IdToToken, blkSucShards int, fName string, wg *sync.WaitGroup,
-	cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool) {
+	cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool, dst *stat.DelayStat) {
 	blk.SetUploading()
 	log.WithFields(log.Fields{
 		"fileName": fName,
@@ -63,7 +64,7 @@ func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{},
 			if openTkPool {
 				go v.Upload(hst, ab, shdQ, tkpool, fName, blk.bNum, wg, cst, nst)
 			}else {
-				go v.UploadBK(hst, ab, shdQ, fName, blk.bNum, wg, cst, nst, nodeshs)
+				go v.UploadBK(hst, ab, shdQ, fName, blk.bNum, wg, cst, nst, nodeshs, dst)
 			}
 
 		}
