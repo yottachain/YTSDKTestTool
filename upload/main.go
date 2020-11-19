@@ -33,6 +33,7 @@ func main()  {
 	var openstat *bool
 	var openTkPool *bool
 	var connNowait *bool
+	var nodeSeqence *bool
 	var wgdivisor int
 	var nodeShards int
 
@@ -53,6 +54,7 @@ func main()  {
 	openstat = flag.Bool("os", false, "是否开启成功率等相关统计")
 	openTkPool = flag.Bool("otp", false, "是否开启token池")
 	connNowait = flag.Bool("cnw", false, "与节点建立连接是否等待")
+	nodeSeqence = flag.Bool("sns", false, "是否从节点列表中顺序选取节点")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -63,6 +65,7 @@ func main()  {
 		"openstat": *openstat,
 		"openTkPool": *openTkPool,
 		"connNowait": *connNowait,
+		"nodeSeqence": *nodeSeqence,
 		"files": files,
 		"filesize": filesize,
 		"shardeds": shardeds,
@@ -127,7 +130,7 @@ func main()  {
 	}
 
 	upStartTime := time.Now()
-	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst, nodeShards, *openTkPool, dst, *connNowait)
+	inDatabaseTime := ups.FileUpload(hst, ab, &wg, cst, nst, nodeShards, *openTkPool, dst, *connNowait, *nodeSeqence)
 	//log.WithFields(log.Fields{
 	//}).Info("indatabase upload success")
 

@@ -26,7 +26,28 @@ type block struct {
 	upStatus blkUpstatus
 	shardSucs int	//上传分片成功的数量
 	nodeShards map[peer.ID] int
+	curNodeIdx int
 	sync.Mutex
+}
+
+func (blk *block) NodeIdxPlus(len int) (idx int) {
+	blk.Lock()
+	defer blk.Unlock()
+
+	//if blk.curNodeIdx == 0 {
+	//	var r = rand.New(rand.NewSource(time.Now().UnixNano()))
+	//	blk.curNodeIdx = r.Intn(len)
+	//}
+
+	if blk.curNodeIdx >= len {
+		blk.curNodeIdx = 0
+		idx = blk.curNodeIdx
+	}else {
+		idx = blk.curNodeIdx
+		blk.curNodeIdx++
+	}
+
+	return idx
 }
 
 func (blk *block) GetUploadStatus() blkUpstatus {
@@ -51,7 +72,8 @@ func (blk *block) IsUploaded() bool {
 
 func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{}, shdQ chan struct{},
 	tkpool chan *tk.IdToToken, blkSucShards int, fName string, wg *sync.WaitGroup,
-	cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool, dst *stat.DelayStat, connNowait bool) {
+	cst *st.Ccstat, nst *st.NodeStat, nodeshs int, openTkPool bool, dst *stat.DelayStat, connNowait bool,
+	nodeSeqence bool) {
 	blk.SetUploading()
 	log.WithFields(log.Fields{
 		"fileName": fName,
@@ -62,9 +84,9 @@ func (blk *block) ShardUpload(hst hi.Host, ab *cm.AddrsBook, blkQ chan struct{},
 		if v.IsUnUpload() {
 			shdQ <- struct{}{}
 			if openTkPool {
-				go v.Upload(hst, ab, shdQ, tkpool, fName, blk.bNum, wg, cst, nst, connNowait)
+				go v.Upload(hst, ab, shdQ, tkpool, fName, blk.bNum, wg, cst, nst, connNowait, dst)
 			}else {
-				go v.UploadBK(hst, ab, shdQ, fName, blk.bNum, wg, cst, nst, nodeshs, dst, connNowait)
+				go v.UploadBK(hst, ab, shdQ, fName, blk.bNum, wg, cst, nst, nodeshs, dst, connNowait, nodeSeqence)
 			}
 
 		}

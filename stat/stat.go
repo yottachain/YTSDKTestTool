@@ -24,6 +24,11 @@ const (
 	GETNODEDELAY = "getNodeDelay"
 	GETAVAILABLEDEALY = "getAvailbaleDelay"
 	GETNODEIDDEALY = "getNodeIdDelay"
+	PROTOGTREQDEALY = "protoGtReqDelay"
+	PROTOSDREQDEALY = "protoSdReqDelay"
+	PROTOSDRSPDEALY = "protoSdRespDelay"
+	LOGDELAY = "logWriteDelay"
+	GETTOKENDELAY = "getTokenDelay"
 )
 
 func NewDelaystat(logName string) (ds *DelayStat) {
@@ -70,9 +75,35 @@ func (ds *DelayStat) Print() {
 			ds.delays[GETNODEIDDEALY] = &delay{0, 0, 0}
 			gnidd = ds.delays[GETNODEIDDEALY]
 		}
+		gtreq, ok := ds.delays[PROTOGTREQDEALY]
+		if !ok {
+			ds.delays[PROTOGTREQDEALY] = &delay{0, 0, 0}
+			gtreq = ds.delays[PROTOGTREQDEALY]
+		}
+		sdreq, ok := ds.delays[PROTOSDREQDEALY]
+		if !ok {
+			ds.delays[PROTOSDREQDEALY] = &delay{0, 0, 0}
+			sdreq = ds.delays[PROTOSDREQDEALY]
+		}
+		sdresp, ok := ds.delays[PROTOSDRSPDEALY]
+		if !ok {
+			ds.delays[PROTOSDRSPDEALY] = &delay{0, 0, 0}
+			sdresp = ds.delays[PROTOSDRSPDEALY]
+		}
+		logdly, ok := ds.delays[LOGDELAY]
+		if !ok {
+			ds.delays[LOGDELAY] = &delay{0, 0, 0}
+			logdly = ds.delays[LOGDELAY]
+		}
+		gtdly, ok := ds.delays[GETTOKENDELAY]
+		if !ok {
+			ds.delays[GETTOKENDELAY] = &delay{0, 0, 0}
+			gtdly = ds.delays[GETTOKENDELAY]
+		}
 
-		_, _ = fmt.Fprintf(ds.fd, "getNode-delay=%d getAvaialble-delay=%d getNodeId-delay=%d\n",
-					gnd.avgDlay, gad.avgDlay, gnidd.avgDlay)
+		_, _ = fmt.Fprintf(ds.fd, "getNode-delay=%d getAvaialble-delay=%d getNodeId-delay=%d " +
+					"proto-gtreq-delay=%d proto-sdreq-delay=%d proto-sdresp-delay=%d log-delay=%d gettoken-delay=%d\n",
+					gnd.avgDlay, gad.avgDlay, gnidd.avgDlay, gtreq.avgDlay, sdreq.avgDlay, sdresp.avgDlay, logdly.avgDlay, gtdly.avgDlay)
 		ds.Unlock()
 	}
 }

@@ -99,7 +99,8 @@ func (f *File) FileInit(fs int, datasrcName string) error {
 
 	f.blocks = make([] *block, bls)
 	for j := 0; j < bls; j++ {
-		f.blocks[j] = &block{j, make([] *shard, 160), BUNUPLOAD, 0, map[peer.ID]int{}, sync.Mutex{}}
+		f.blocks[j] = &block{j, make([] *shard, 160), BUNUPLOAD, 0,
+			map[peer.ID]int{}, 0, sync.Mutex{}}
 		for k := 0; k < 160; k++ {
 			var data = make([]byte, 16*1024)
 			f.fd.Read(data)
@@ -159,7 +160,7 @@ func (f *File) FilePrintInfo() {
 
 func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, fQ chan struct{}, blkQ chan struct{}, shdQ chan struct{},
 			tkpool chan *tk.IdToToken, shardSucs int, wg *sync.WaitGroup, cst *st.Ccstat, nst *st.NodeStat,
-			nodeshs int, openTkPool bool, dst *stat.DelayStat, connNowait bool) {
+			nodeshs int, openTkPool bool, dst *stat.DelayStat, connNowait bool, nodeSeqence bool) {
 	f.SetUsed()
 	log.WithFields(log.Fields{
 		"filename": f.fileName,
@@ -170,7 +171,7 @@ func (f *File) BlockUpload(hst hi.Host, ab *cm.AddrsBook, fQ chan struct{}, blkQ
 		if v.IsUnupload() {
 			blkQ <- struct{}{}
 			go v.ShardUpload(hst, ab, blkQ, shdQ, tkpool, shardSucs, f.fileName,
-				wg, cst, nst, nodeshs, openTkPool, dst, connNowait)
+				wg, cst, nst, nodeshs, openTkPool, dst, connNowait, nodeSeqence)
 		}
 	}
 

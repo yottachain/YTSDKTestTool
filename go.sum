@@ -322,11 +322,11 @@ github.com/yottachain/YTHost v1.0.2-0.20200421075459-15b3e110c71a h1:kYM388CiSzz
 github.com/yottachain/YTHost v1.0.2-0.20200421075459-15b3e110c71a/go.mod h1:PMIX6FcFzZ5xaexcI1ivumzoo9nblL2wZc5it/R3SeU=
 github.com/yottachain/YTHost v1.0.2-0.20200821072632-57d9d05c509e h1:0Z79xQjzaXmb0YxfL16P+Nv2jC3/Bshvk+NJFHSLB2A=
 github.com/yottachain/YTHost v1.0.2-0.20200821072632-57d9d05c509e/go.mod h1:PMIX6FcFzZ5xaexcI1ivumzoo9nblL2wZc5it/R3SeU=
-github.com/yottachain/YTHost v1.0.2-0.20201023062655-e643e1e6a45e h1:oXTSudKmrVxmia+RvJLM3EdAqBux1USiTusC6OVO61A=
-github.com/yottachain/YTHost v1.0.2-0.20201023062655-e643e1e6a45e/go.mod h1:PMIX6FcFzZ5xaexcI1ivumzoo9nblL2wZc5it/R3SeU=
+github.com/yottachain/YTHost v1.0.2-0.20201119101814-dca169c7830b h1:CDk7MIcKUGEjhtleAjW+x0J9dW6i2dXGkMKb+k9h0Tw=
+github.com/yottachain/YTHost v1.0.2-0.20201119101814-dca169c7830b/go.mod h1:PMIX6FcFzZ5xaexcI1ivumzoo9nblL2wZc5it/R3SeU=
 github.com/yottachain/YTLRC v0.0.0-20200224075657-42eeb6c231cc/go.mod h1:ZeQbupNqcSqZmN7Jk3a05+Da8ycSkAMC8g+m9AHrNGs=
-github.com/yottachain/YTStTool v0.0.0-20201022110313-3e19e90a3129 h1:ZDmQAvILFI4lQdcr+g0Q+UxTW/bDyMkl7VPe1Q2pAKk=
-github.com/yottachain/YTStTool v0.0.0-20201022110313-3e19e90a3129/go.mod h1:EHFBuWam4qP+MDFVqnqmlDT8I4dcHErzA71pFghpKXo=
+github.com/yottachain/YTStTool v0.0.0-20201027094449-b23be508ef26 h1:IxgE6y/gkZsaySc5byVHGzm3E81M3Za2oJW2F5TQe1o=
+github.com/yottachain/YTStTool v0.0.0-20201027094449-b23be508ef26/go.mod h1:EHFBuWam4qP+MDFVqnqmlDT8I4dcHErzA71pFghpKXo=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.opencensus.io v0.22.1/go.mod h1:Ap50jQcDJrx6rB6VgeeFPtuPIf3wMRvRfrfYDO6+BmA=
 go.opencensus.io v0.22.2/go.mod h1:yxeiOL68Rb0Xd1ddK5vPZ/oVn4vY4Ynel7k9FzqtOIw=

@@ -57,7 +57,6 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 
 	nId := ab.GetWeightId(idx)
 	nst.SetWeight(nId, ab.GetIdWeight(nId))
-
 	addrs, ok := ab.Get(nId)
 	if !ok {
 		log.WithFields(log.Fields{
@@ -77,8 +76,9 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 	}else {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(10))
 		defer cancel()
-		clt, err := hst.ClientStore().Get(ctx, nId, addrs)
-		if clt == nil || err != nil {
+		c, err := hst.ClientStore().Get(ctx, nId, addrs)
+		clt = c
+		if err != nil {
 			ADDRs := make([]string, len(addrs))
 			for k, m := range addrs {
 				ADDRs[k] = m.String()
@@ -117,10 +117,10 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 	ssTime := time.Now()
 	res, err := clt.SendMsg(ctx1, message.MsgIDNodeCapacityRequest.Value(), getTokenData)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"nodeid": peer.Encode(nId),
-			"error": err,
-		}).Error("get token fail")
+		//log.WithFields(log.Fields{
+		//	"nodeid": peer.Encode(nId),
+		//	"error": err,
+		//}).Error("get token fail")
 
 		nst.GtDelay(nId, time.Now().Sub(ssTime))
 		nst.GtErrAdd(nId)
@@ -147,9 +147,9 @@ func gettoken (hst hi.Host, ab *cm.AddrsBook, gtkQ chan struct{}, tkpool chan *I
 	if !resGetToken.Writable  {
 		nst.GtErrAdd(nId)
 		cst.GtccSub()
-		log.WithFields(log.Fields{
-			"nodeid": peer.Encode(nId),
-		}).Error("get token fail, token unavailable")
+		//log.WithFields(log.Fields{
+		//	"nodeid": peer.Encode(nId),
+		//}).Error("get token fail, token unavailable")
 		return
 	}else {
 		log.WithFields(log.Fields{
